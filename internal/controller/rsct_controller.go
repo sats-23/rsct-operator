@@ -65,6 +65,15 @@ type RSCTReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.16.3/pkg/reconcile
 func (r *RSCTReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
+
+	rsctList := &rsctv1alpha1.RSCTList{}
+	if err := r.Client.List(ctx, rsctList, &client.ListOptions{}); err != nil {
+		return reconcile.Result{}, fmt.Errorf("failed to list RSCT resources: %w", err)
+	}
+	if len(rsctList.Items) > 1 {
+		return reconcile.Result{}, fmt.Errorf("only one RSCT custom resource is allowed, but found %d", len(rsctList.Items))
+	}
+
 	rsct := &rsctv1alpha1.RSCT{}
 	if err := r.Client.Get(ctx, req.NamespacedName, rsct); err != nil {
 		if errors.IsNotFound(err) {
