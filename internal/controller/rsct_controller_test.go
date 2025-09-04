@@ -32,7 +32,7 @@ import (
 
 var _ = Describe("RSCT Controller", func() {
 	Context("When reconciling a resource", func() {
-		const resourceName = "test-resource"
+		const resourceName = "test-rsct"
 
 		ctx := context.Background()
 
@@ -66,6 +66,7 @@ var _ = Describe("RSCT Controller", func() {
 			By("Cleanup the specific resource instance RSCT")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
 		})
+
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
 			controllerReconciler := &RSCTReconciler{
@@ -79,6 +80,34 @@ var _ = Describe("RSCT Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
 			// Example: If you expect a certain status condition after reconciliation, verify it here.
+		})
+
+		It("should fail to reconcile if more than one RSCT CR exists", func() {
+			By("Creating a second RSCT custom resource")
+			secondRSCT := &rsctv1alpha1.RSCT{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "second-rsct",
+					Namespace: "default",
+				},
+			}
+			Expect(k8sClient.Create(ctx, secondRSCT)).To(Succeed())
+
+			controllerReconciler := &RSCTReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      "second-rsct",
+					Namespace: "default",
+				},
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("only one RSCT custom resource is allowed"))
+
+			// Cleanup the second RSCT
+			Expect(k8sClient.Delete(ctx, secondRSCT)).To(Succeed())
 		})
 	})
 })
