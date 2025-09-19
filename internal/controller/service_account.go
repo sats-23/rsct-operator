@@ -24,7 +24,9 @@ import (
 	securityv1 "github.com/openshift/api/security/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -65,6 +67,23 @@ func (r *RSCTReconciler) currentRSCTServiceAccount(ctx context.Context, nsName t
 		return false, nil, err
 	}
 
+	// if non-OpenShift cluster, skip SCC logic
+	gvk := schema.GroupVersionKind{
+		Group:   "security.openshift.io",
+		Version: "v1",
+		Kind:    "SecurityContextConstraints",
+	}
+
+	mapper := r.Client.RESTMapper()
+	_, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
+	if meta.IsNoMatchError(err) {
+		// skip SCC logic
+		return true, sa, nil
+	} else if err != nil {
+		return true, sa, fmt.Errorf("failed to check SCC API: %w", err)
+	}
+
+	// for OpenShift, ensure the service account has privileged SCC
 	scc := &securityv1.SecurityContextConstraints{}
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: "privileged"}, scc); err != nil {
 		return true, sa, fmt.Errorf("error getting privileged SCC: %w", err)
